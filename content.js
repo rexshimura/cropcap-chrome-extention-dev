@@ -17,13 +17,33 @@ let overlayCanvas = null;
 let ctxOverlay = null;
 let recordDuration = 3;
 let hideCursorPreference = false;
-let countdownDelaySeconds = 0; // Global reference tracking placeholder
+let countdownDelaySeconds = 0; 
+
+// 🎯 HELPER: Controls YouTube Video Elements in the current tab context
+function controlYouTubeVideo(action) {
+  try {
+    const videoElement = document.querySelector('video.html5-main-video') || document.querySelector('video');
+    if (!videoElement) return;
+    
+    if (action === 'play') {
+      videoElement.play();
+    } else if (action === 'pause') {
+      videoElement.pause();
+    }
+  } catch (err) {
+    console.log("Not a YouTube/HTML5 video node context or element missing.");
+  }
+}
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "start_selection") {
     recordDuration = request.duration;
     hideCursorPreference = request.hideCursor || false;
-    countdownDelaySeconds = request.timerSeconds || 0; // Cache properties locally
+    countdownDelaySeconds = request.timerSeconds || 0; 
+    
+    // 🎯 YouTube Automation Stage 1: Pause instantly when user initiates selection loop
+    controlYouTubeVideo('pause');
+    
     createSnippingOverlay();
   }
 });
@@ -107,6 +127,9 @@ async function endSnipping(e) {
 
   if (finalScreenW > 15 && finalScreenH > 15) {
     await captureAbsoluteMonitorSnippet(finalScreenX, finalScreenY, finalScreenW, finalScreenH, visualX, visualY, visualW, visualH);
+  } else {
+    // If capture area selection was cancelled/invalid, resume the video element state natively
+    controlYouTubeVideo('play');
   }
 }
 
@@ -138,7 +161,6 @@ async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY,
       const intervalTime = 100; 
       const maxFrames = (recordDuration * 1000) / intervalTime;
 
-      // Global system cursor wiper
       let cursorSilencerSheet = null;
       if (hideCursorPreference) {
         cursorSilencerSheet = document.createElement("style");
@@ -146,7 +168,6 @@ async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY,
         document.head.appendChild(cursorSilencerSheet);
       }
 
-      // Main tracking target boundary framing element box
       const recordFrame = document.createElement('div');
       recordFrame.style.position = 'fixed';
       recordFrame.style.left = `${visX - 3}px`;
@@ -188,25 +209,27 @@ async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY,
       timerLabel.style.fontSize = '11px';
       timerLabel.style.borderRadius = '6px';
       
-      // Determine baseline display text status configuration parameters
       if (countdownDelaySeconds > 0) {
-        timerLabel.style.background = '#f59e0b'; // Premium alert gold indicator
+        timerLabel.style.background = '#f59e0b'; 
         timerLabel.innerHTML = `STARTING IN | ${countdownDelaySeconds}s`;
         recordFrame.style.border = '1px dashed rgba(245, 158, 11, 0.5)';
       } else {
         timerLabel.style.background = '#ef4444';
         timerLabel.innerHTML = `REC | ${recordDuration.toFixed(1)}s`;
+        // If countdown timer isn't checked, fire up video immediately
+        controlYouTubeVideo('play');
       }
       
       recordFrame.appendChild(timerLabel);
       document.body.appendChild(recordFrame);
 
-      // 🎯 PIPELINE FOR PRE-RECORDING COUNTDOWN TIMER
       let countdownLeft = countdownDelaySeconds;
       let timeLeft = recordDuration;
 
       const runRecordingLoop = () => {
-        // Shift frame theme bounds clean over onto recording metrics indicators
+        // 🎯 YouTube Automation Stage 2: Resume playback instantly when countdown hits 0
+        controlYouTubeVideo('play');
+
         timerLabel.style.background = '#ef4444';
         recordFrame.style.border = '1px dashed rgba(239, 68, 68, 0.4)';
         timerLabel.innerHTML = `REC | ${timeLeft.toFixed(1)}s`;
@@ -223,6 +246,9 @@ async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY,
             clearInterval(recordInterval);
             videoTrack.stop();
             
+            // 🎯 YouTube Automation Stage 3: Halt video exactly when capture limits end
+            controlYouTubeVideo('pause');
+
             if (cursorSilencerSheet) cursorSilencerSheet.remove();
 
             setTimeout(() => {
@@ -234,13 +260,12 @@ async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY,
         }, intervalTime);
       };
 
-      // Handle timing logic paths conditionally
       if (countdownLeft > 0) {
         const countdownInterval = setInterval(() => {
           countdownLeft -= 1;
           if (countdownLeft <= 0) {
             clearInterval(countdownInterval);
-            runRecordingLoop(); // Launch capture loop
+            runRecordingLoop();
           } else {
             timerLabel.innerHTML = `STARTING IN | ${countdownLeft}s`;
           }
@@ -251,6 +276,8 @@ async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY,
     };
   } catch (err) {
     console.error(err);
+    // Safety backup to make sure video keeps playing if tab request triggers window prompt errors
+    controlYouTubeVideo('play');
   }
 }
 
@@ -478,7 +505,12 @@ function showCropcapPreview(frames, physicalW, physicalH) {
   modal.appendChild(container);
   document.body.appendChild(modal);
 
-  closeBtn.addEventListener('click', () => { clearInterval(animationInterval); modal.remove(); });
+  // If user hits cancel, ensure video state turns back to play cleanly
+  closeBtn.addEventListener('click', () => { 
+    clearInterval(animationInterval); 
+    modal.remove(); 
+    controlYouTubeVideo('play');
+  });
 
   downloadBtn.addEventListener('click', () => {
     const customName = fileNameInput.value.trim() || defaultFileName;
@@ -509,5 +541,8 @@ function showCropcapPreview(frames, physicalW, physicalH) {
 
     modal.remove();
     clearInterval(animationInterval);
+    
+    // Resume playback natively once loops hit workspace exports
+    controlYouTubeVideo('play');
   });
 }
