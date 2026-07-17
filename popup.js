@@ -1,6 +1,23 @@
+// Toggle input visibility dynamically based on user preferences
+document.getElementById('useDelayTimer').addEventListener('change', (e) => {
+  const row = document.getElementById('delayRow');
+  const input = document.getElementById('delayDuration');
+  if (e.target.checked) {
+    row.classList.add('active');
+    input.disabled = false;
+  } else {
+    row.classList.remove('active');
+    input.disabled = true;
+  }
+});
+
 document.getElementById('snapBtn').addEventListener('click', async () => {
   const duration = parseInt(document.getElementById('duration').value) || 3;
   const hideCursor = document.getElementById('hideCursor').checked;
+  
+  // 🎯 Extract Countdown configuration markers
+  const useTimer = document.getElementById('useDelayTimer').checked;
+  const timerSeconds = useTimer ? (parseInt(document.getElementById('delayDuration').value) || 3) : 0;
   
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.id) return;
@@ -11,7 +28,12 @@ document.getElementById('snapBtn').addEventListener('click', async () => {
   }
 
   try {
-    await chrome.tabs.sendMessage(tab.id, { action: "start_selection", duration: duration, hideCursor: hideCursor });
+    await chrome.tabs.sendMessage(tab.id, { 
+      action: "start_selection", 
+      duration: duration, 
+      hideCursor: hideCursor,
+      timerSeconds: timerSeconds 
+    });
     window.close();
   } catch (err) {
     try {
@@ -21,11 +43,16 @@ document.getElementById('snapBtn').addEventListener('click', async () => {
       });
       
       setTimeout(async () => {
-        await chrome.tabs.sendMessage(tab.id, { action: "start_selection", duration: duration, hideCursor: hideCursor });
+        await chrome.tabs.sendMessage(tab.id, { 
+          action: "start_selection", 
+          duration: duration, 
+          hideCursor: hideCursor,
+          timerSeconds: timerSeconds 
+        });
         window.close();
       }, 150);
     } catch (injectErr) {
-      console.error("Script mapping setup execution failed:", injectErr);
+      console.error(injectErr);
     }
   }
 });

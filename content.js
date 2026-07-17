@@ -17,11 +17,13 @@ let overlayCanvas = null;
 let ctxOverlay = null;
 let recordDuration = 3;
 let hideCursorPreference = false;
+let countdownDelaySeconds = 0; // Global reference tracking placeholder
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "start_selection") {
     recordDuration = request.duration;
     hideCursorPreference = request.hideCursor || false;
+    countdownDelaySeconds = request.timerSeconds || 0; // Cache properties locally
     createSnippingOverlay();
   }
 });
@@ -136,6 +138,7 @@ async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY,
       const intervalTime = 100; 
       const maxFrames = (recordDuration * 1000) / intervalTime;
 
+      // Global system cursor wiper
       let cursorSilencerSheet = null;
       if (hideCursorPreference) {
         cursorSilencerSheet = document.createElement("style");
@@ -143,6 +146,7 @@ async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY,
         document.head.appendChild(cursorSilencerSheet);
       }
 
+      // Main tracking target boundary framing element box
       const recordFrame = document.createElement('div');
       recordFrame.style.position = 'fixed';
       recordFrame.style.left = `${visX - 3}px`;
@@ -179,41 +183,71 @@ async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY,
       timerLabel.style.position = 'absolute';
       timerLabel.style.top = '-32px';
       timerLabel.style.left = '-2px';
-      timerLabel.style.background = '#ef4444';
       timerLabel.style.color = '#ffffff';
       timerLabel.style.padding = '4px 10px';
       timerLabel.style.fontSize = '11px';
       timerLabel.style.borderRadius = '6px';
-      timerLabel.innerHTML = `REC | ${recordDuration.toFixed(1)}s`;
+      
+      // Determine baseline display text status configuration parameters
+      if (countdownDelaySeconds > 0) {
+        timerLabel.style.background = '#f59e0b'; // Premium alert gold indicator
+        timerLabel.innerHTML = `STARTING IN | ${countdownDelaySeconds}s`;
+        recordFrame.style.border = '1px dashed rgba(245, 158, 11, 0.5)';
+      } else {
+        timerLabel.style.background = '#ef4444';
+        timerLabel.innerHTML = `REC | ${recordDuration.toFixed(1)}s`;
+      }
       
       recordFrame.appendChild(timerLabel);
       document.body.appendChild(recordFrame);
 
+      // 🎯 PIPELINE FOR PRE-RECORDING COUNTDOWN TIMER
+      let countdownLeft = countdownDelaySeconds;
       let timeLeft = recordDuration;
 
-      const recordInterval = setInterval(() => {
-        ctx.drawImage(video, scrX * scaleX, scrY * scaleY, scrW * scaleX, scrH * scaleY, 0, 0, canvas.width, canvas.height);
-        frames.push(canvas.toDataURL('image/jpeg', 0.6));
-
-        timeLeft -= (intervalTime / 1000);
-        if (timeLeft < 0) timeLeft = 0;
+      const runRecordingLoop = () => {
+        // Shift frame theme bounds clean over onto recording metrics indicators
+        timerLabel.style.background = '#ef4444';
+        recordFrame.style.border = '1px dashed rgba(239, 68, 68, 0.4)';
         timerLabel.innerHTML = `REC | ${timeLeft.toFixed(1)}s`;
 
-        if (frames.length >= maxFrames) {
-          clearInterval(recordInterval);
-          videoTrack.stop();
-          
-          if (cursorSilencerSheet) {
-            cursorSilencerSheet.remove();
-          }
+        const recordInterval = setInterval(() => {
+          ctx.drawImage(video, scrX * scaleX, scrY * scaleY, scrW * scaleX, scrH * scaleY, 0, 0, canvas.width, canvas.height);
+          frames.push(canvas.toDataURL('image/jpeg', 0.6));
 
-          setTimeout(() => {
-            recordFrame.remove();
-            cornerStyle.remove();
-            showCropcapPreview(frames, canvas.width, canvas.height);
-          }, 200);
-        }
-      }, intervalTime);
+          timeLeft -= (intervalTime / 1000);
+          if (timeLeft < 0) timeLeft = 0;
+          timerLabel.innerHTML = `REC | ${timeLeft.toFixed(1)}s`;
+
+          if (frames.length >= maxFrames) {
+            clearInterval(recordInterval);
+            videoTrack.stop();
+            
+            if (cursorSilencerSheet) cursorSilencerSheet.remove();
+
+            setTimeout(() => {
+              recordFrame.remove();
+              cornerStyle.remove();
+              showCropcapPreview(frames, canvas.width, canvas.height);
+            }, 200);
+          }
+        }, intervalTime);
+      };
+
+      // Handle timing logic paths conditionally
+      if (countdownLeft > 0) {
+        const countdownInterval = setInterval(() => {
+          countdownLeft -= 1;
+          if (countdownLeft <= 0) {
+            clearInterval(countdownInterval);
+            runRecordingLoop(); // Launch capture loop
+          } else {
+            timerLabel.innerHTML = `STARTING IN | ${countdownLeft}s`;
+          }
+        }, 1000);
+      } else {
+        runRecordingLoop();
+      }
     };
   } catch (err) {
     console.error(err);
@@ -339,7 +373,6 @@ function showCropcapPreview(frames, physicalW, physicalH) {
   inputGroup.appendChild(fileNameInput);
   container.appendChild(inputGroup);
 
-  // 🎯 WATERMARK PREMIUM UI UPDATES (Matching custom gray micro-checkbox configurations)
   const watermarkWrapper = document.createElement('label');
   watermarkWrapper.style.display = 'flex';
   watermarkWrapper.style.alignItems = 'center';
