@@ -14,31 +14,43 @@
     .header {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 16px;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .header img {
+      width: 18px;
+      height: 18px;
+      object-fit: contain;
     }
     .header h3 {
       margin: 0;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
-      letter-spacing: -0.5px;
+      letter-spacing: -0.3px;
       color: #ffffff;
     }
     .field-group {
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
-    label {
+    label.field-title {
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      color: #a1a1aa;
+      color: #71717a;
       display: block;
       margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
     .input-wrapper {
       position: relative;
       display: flex;
       align-items: center;
+      flex: 1;
     }
     .input-icon {
       position: absolute;
@@ -46,21 +58,93 @@
       display: flex;
       align-items: center;
     }
-    input {
+    input[type="number"] {
       width: 100%;
       padding: 8px 8px 8px 34px;
-      background-color: #2b2b36;
-      border: 1px solid #3f3f46;
+      background-color: #09090b;
+      border: 1px solid #27272a;
       border-radius: 6px;
       color: #ffffff;
       font-size: 13px;
       box-sizing: border-box;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    input:focus {
+    input[type="number"]:focus {
       outline: none;
       border-color: #6366f1;
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
     }
+    .unit-text {
+      font-size: 12px;
+      color: #71717a;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    
+    /* Premium Premium Premium Checkbox Grid Layout Container */
+    .checkbox-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      cursor: pointer;
+      user-select: none;
+      box-sizing: border-box;
+      padding: 2px 0;
+    }
+    
+    .custom-checkbox {
+      width: 16px;
+      height: 16px;
+      background-color: #09090b;
+      border: 1px solid #27272a;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.2s, border-color 0.2s;
+      flex-shrink: 0;
+    }
+    
+    .checkbox-container input {
+      display: none;
+    }
+    
+    .checkbox-container input:checked + .custom-checkbox {
+      background-color: #6366f1;
+      border-color: #6366f1;
+    }
+    
+    .custom-checkbox svg {
+      width: 10px;
+      height: 10px;
+      stroke: white;
+      stroke-width: 4px;
+      fill: none;
+      opacity: 0;
+      transform: scale(0.6);
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    
+    .checkbox-container input:checked + .custom-checkbox svg {
+      opacity: 1;
+      transform: scale(1);
+    }
+    
+    .checkbox-label-text {
+      font-size: 12px;
+      color: #a1a1aa;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    
+    .checkbox-container:hover .checkbox-label-text {
+      color: #d4d4d8;
+    }
+    .checkbox-container:hover .custom-checkbox {
+      border-color: #3f3f46;
+    }
+    
     button {
       width: 100%;
       padding: 10px;
@@ -84,19 +168,33 @@
 </head>
 <body>
   <div class="header">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"></path><path d="M18 22V8a2 2 0 0 0-2-2H2"></path></svg>
+    <!-- NATIVE BRAND LOGO -->
+    <img src="main-icon.png" alt="Cropcap">
     <h3>Cropcap</h3>
   </div>
 
   <div class="field-group">
-    <label for="duration">Record Window Duration</label>
-    <div class="input-wrapper">
-      <div class="input-icon">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+    <label class="field-title" for="duration">Record Window Duration</label>
+    <div class="input-row">
+      <div class="input-wrapper">
+        <div class="input-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#71717a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        </div>
+        <input type="number" id="duration" value="3" min="1" max="10">
       </div>
-      <input type="number" id="duration" value="3" min="1" max="10">
+      <!-- ATTACHED METRIC LABEL UNIT -->
+      <span class="unit-text">Seconds</span>
     </div>
   </div>
+
+  <!-- Custom Hide Cursor Checklist Control Node Map Option -->
+  <label class="checkbox-container">
+    <input type="checkbox" id="hideCursor">
+    <div class="custom-checkbox">
+      <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </div>
+    <span class="checkbox-label-text">Hide Cursor</span>
+  </label>
 
   <button id="snapBtn">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3" fill="currentColor"></circle></svg>

@@ -21,10 +21,9 @@ window.addEventListener('load', () => {
   const titleLabel = document.getElementById('titleLabel');
   const iconBox = document.getElementById('iconBox');
 
-  // Initialize background shapegrid engine
   initShapeGrid();
 
-  chrome.storage.local.get(["pendingFrames", "targetW", "targetH", "fileName"], (data) => {
+  chrome.storage.local.get(["pendingFrames", "targetW", "targetH", "fileName", "withWatermark"], async (data) => {
     if (data.pendingFrames && data.pendingFrames.length > 0) {
       
       setTimeout(() => {
@@ -38,12 +37,25 @@ window.addEventListener('load', () => {
         iconBox.firstElementChild.classList.add('spinning');
       }, 400);
 
+      let processedFrames = data.pendingFrames;
+
+      // 🎯 WATERMARK PIPELINE: Stamp the raw icon + branding text on the bottom-left corner
+      if (data.withWatermark) {
+        phaseLabel.innerText = "WATERMARKING";
+        processedFrames = await applyWatermarkToFrames(
+          data.pendingFrames, 
+          data.targetW || 400, 
+          data.targetH || 400, 
+          chrome.runtime.getURL('main-icon.png')
+        );
+      }
+
       gifshot.createGIF({
-        images: data.pendingFrames,
+        images: processedFrames,
         interval: 0.1,
         gifWidth: data.targetW || 400,
         gifHeight: data.targetH || 400,
-        numFrames: data.pendingFrames.length,
+        numFrames: processedFrames.length,
         sampleInterval: 5,
         numWorkers: 2 
       }, function(obj) {
@@ -69,7 +81,7 @@ window.addEventListener('load', () => {
           dl.href = obj.image;
           dl.click();
           
-          chrome.storage.local.remove(["pendingFrames", "targetW", "targetH", "fileName"]);
+          chrome.storage.local.remove(["pendingFrames", "targetW", "targetH", "fileName", "withWatermark"]);
           setTimeout(() => window.close(), 1500);
         } else {
           alert("Error compiling: " + obj.error);
@@ -82,20 +94,79 @@ window.addEventListener('load', () => {
   });
 });
 
+// 🎯 COMPILER WATERMARK CALCULATOR ENGINE (Raw Icon + Text)
+async function applyWatermarkToFrames(framesArray, targetW, targetH, iconUrl) {
+  const logo = new Image();
+  logo.src = iconUrl;
+  await new Promise(resolve => logo.onload = resolve);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext('2d');
+
+  const processed = [];
+
+  for (let i = 0; i < framesArray.length; i++) {
+    const frameImg = new Image();
+    frameImg.src = framesArray[i];
+    await new Promise(resolve => frameImg.onload = resolve);
+
+    ctx.clearRect(0, 0, targetW, targetH);
+    // Draw the original capture frame background
+    ctx.drawImage(frameImg, 0, 0, targetW, targetH);
+
+    // 🎯 DYNAMIC SCALING GEOMETRICS (Bottom-Left Corner Placement)
+    const padding = 12;
+    const iconSize = Math.max(12, Math.floor(targetW * 0.045)); // Small, subtle icon footprint
+    const rx = padding;
+    const ry = targetH - iconSize - padding;
+
+    // Set up high-end typography rules (Responsive font sizing)
+    const fontSize = Math.max(9, Math.floor(targetW * 0.03));
+    ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.textBaseline = "middle";
+
+    // 🎯 TRANSPARENT SHADOW ENGINE
+    // Injected behind BOTH icon and text so they pop on any background color
+    ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+
+    // 1. Stamp raw transparent icon (no circle background background-color patch)
+    ctx.drawImage(logo, rx, ry, iconSize, iconSize);
+
+    // 2. Draw branded label text beside the icon
+    ctx.fillStyle = "#ffffff";
+    const textGap = 6; // Spacing between icon edge and text start
+    ctx.fillText("Captured using Cropcap", rx + iconSize + textGap, ry + iconSize / 2);
+
+    // Reset rendering pipeline shadow variables to prevent bleeding into other components
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    processed.push(canvas.toDataURL('image/jpeg', 0.8));
+  }
+
+  return processed;
+}
+
 // -------------------------------------------------------------
-// 🚀 NATIVE SHAPEGRID BACKGROUND RENDERING ENGINE (React Bits Port)
+// 🚀 SHAPEGRID BACKGROUND RENDERING ENGINE (React Bits Port)
 // -------------------------------------------------------------
 function initShapeGrid() {
   const canvas = document.getElementById('bgCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
-  // Config parameters mapped directly to React Bits properties
   const direction = 'diagonal'; 
   const speed = 0.3;
-  const borderColor = '#1f1f23'; // Subtle grid border color
+  const borderColor = '#1f1f23'; 
   const squareSize = 45;
-  const hoverFillColor = 'rgba(99, 102, 241, 0.08)'; // Premium indigo highlight trace
+  const hoverFillColor = 'rgba(99, 102, 241, 0.08)'; 
   const shape = 'hexagon'; 
   const hoverTrailAmount = 4;
 
@@ -218,29 +289,18 @@ function initShapeGrid() {
     } else if (shape === 'circle') {
       const offsetX = ((gridOffset.x % squareSize) + squareSize) % squareSize;
       const offsetY = ((gridOffset.y % squareSize) + squareSize) % squareSize;
+      const adjustedX = mouseX - offsetX;
+      const adjustedY = mouseY - offsetY;
 
-      const cols = Math.ceil(canvas.width / squareSize) + 3;
-      const rows = Math.ceil(canvas.height / squareSize) + 3;
+      const col = Math.round(adjustedX / squareSize);
+      const row = Math.round(adjustedY / squareSize);
 
-      for (let col = -2; col < cols; col++) {
-        for (let row = -2; row < rows; row++) {
-          const cx = col * squareSize + squareSize / 2 + offsetX;
-          const cy = row * squareSize + squareSize / 2 + offsetY;
-
-          const cellKey = `${col},${row}`;
-          const alpha = cellOpacities.get(cellKey);
-          if (alpha) {
-            ctx.globalAlpha = alpha;
-            drawCircle(cx, cy, squareSize);
-            ctx.fillStyle = hoverFillColor;
-            ctx.fill();
-            ctx.globalAlpha = 1;
-          }
-
-          drawCircle(cx, cy, squareSize);
-          ctx.strokeStyle = borderColor;
-          ctx.stroke();
+      if (!hoveredSquare || hoveredSquare.x !== col || hoveredSquare.y !== row) {
+        if (hoveredSquare && hoverTrailAmount > 0) {
+          trailCells.unshift({ ...hoveredSquare });
+          if (trailCells.length > hoverTrailAmount) trailCells.length = hoverTrailAmount;
         }
+        hoveredSquare = { x: col, y: row };
       }
     } else {
       const offsetX = ((gridOffset.x % squareSize) + squareSize) % squareSize;
@@ -269,14 +329,13 @@ function initShapeGrid() {
       }
     }
 
-    // Radial Dark Vignette matching original code
     const gradient = ctx.createRadialGradient(
       canvas.width / 2, canvas.height / 2, 0,
       canvas.width / 2, canvas.height / 2,
       Math.sqrt(canvas.width ** 2 + canvas.height ** 2) / 2
     );
     gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    gradient.addColorStop(1, '#09090b'); // Fades seamlessly into deep slate backdrop
+    gradient.addColorStop(1, '#09090b'); 
 
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);

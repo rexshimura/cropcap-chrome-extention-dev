@@ -16,10 +16,12 @@ let startScreenX, startScreenY;
 let overlayCanvas = null;
 let ctxOverlay = null;
 let recordDuration = 3;
+let hideCursorPreference = false;
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "start_selection") {
     recordDuration = request.duration;
+    hideCursorPreference = request.hideCursor || false;
     createSnippingOverlay();
   }
 });
@@ -55,6 +57,7 @@ function drawMask(x, y, w, h) {
     ctxOverlay.globalCompositeOperation = 'destination-out';
     ctxOverlay.fillRect(x, y, w, h);
     ctxOverlay.globalCompositeOperation = 'source-over';
+    
     ctxOverlay.strokeStyle = '#6366f1';
     ctxOverlay.lineWidth = 2;
     ctxOverlay.strokeRect(x, y, w, h);
@@ -107,10 +110,12 @@ async function endSnipping(e) {
 
 async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY, visW, visH) {
   try {
-    const stream = await navigator.mediaDevices.getDisplayMedia({
+    const displayMediaOptions = {
       video: { displaySurface: "monitor" },
       audio: false
-    });
+    };
+
+    const stream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
 
     const video = document.createElement('video');
     video.srcObject = stream;
@@ -130,6 +135,13 @@ async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY,
       const frames = [];
       const intervalTime = 100; 
       const maxFrames = (recordDuration * 1000) / intervalTime;
+
+      let cursorSilencerSheet = null;
+      if (hideCursorPreference) {
+        cursorSilencerSheet = document.createElement("style");
+        cursorSilencerSheet.innerText = `* { cursor: none !important; }`;
+        document.head.appendChild(cursorSilencerSheet);
+      }
 
       const recordFrame = document.createElement('div');
       recordFrame.style.position = 'fixed';
@@ -190,6 +202,11 @@ async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY,
         if (frames.length >= maxFrames) {
           clearInterval(recordInterval);
           videoTrack.stop();
+          
+          if (cursorSilencerSheet) {
+            cursorSilencerSheet.remove();
+          }
+
           setTimeout(() => {
             recordFrame.remove();
             cornerStyle.remove();
@@ -281,7 +298,7 @@ function showCropcapPreview(frames, physicalW, physicalH) {
 
   const inputGroup = document.createElement('div');
   inputGroup.style.width = '100%'; 
-  inputGroup.style.marginBottom = '24px';
+  inputGroup.style.marginBottom = '16px';
   inputGroup.style.display = 'flex';
   inputGroup.style.flexDirection = 'column';
   inputGroup.style.gap = '8px';
@@ -321,6 +338,69 @@ function showCropcapPreview(frames, physicalW, physicalH) {
   inputGroup.appendChild(inputLabel);
   inputGroup.appendChild(fileNameInput);
   container.appendChild(inputGroup);
+
+  // 🎯 WATERMARK PREMIUM UI UPDATES (Matching custom gray micro-checkbox configurations)
+  const watermarkWrapper = document.createElement('label');
+  watermarkWrapper.style.display = 'flex';
+  watermarkWrapper.style.alignItems = 'center';
+  watermarkWrapper.style.gap = '10px';
+  watermarkWrapper.style.width = '100%';
+  watermarkWrapper.style.marginBottom = '24px';
+  watermarkWrapper.style.cursor = 'pointer';
+  watermarkWrapper.style.userSelect = 'none';
+  watermarkWrapper.style.boxSizing = 'border-box';
+
+  const hiddenCheck = document.createElement('input');
+  hiddenCheck.type = 'checkbox';
+  hiddenCheck.style.display = 'none';
+
+  const customCheck = document.createElement('div');
+  customCheck.style.width = '16px';
+  customCheck.style.height = '16px';
+  customCheck.style.backgroundColor = '#09090b';
+  customCheck.style.border = '1px solid #27272a';
+  customCheck.style.borderRadius = '4px';
+  customCheck.style.display = 'flex';
+  customCheck.style.alignItems = 'center';
+  customCheck.style.justifyContent = 'center';
+  customCheck.style.transition = 'background-color 0.2s, border-color 0.2s';
+  customCheck.style.flexShrink = '0';
+  customCheck.innerHTML = `<svg viewBox="0 0 24 24" style="width:10px; height:10px; stroke:white; stroke-width:4px; fill:none; opacity:0; transform:scale(0.6); transition: opacity 0.15s, transform 0.15s;"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+
+  const watermarkLabel = document.createElement('span');
+  watermarkLabel.innerText = 'With Watermark';
+  watermarkLabel.style.fontSize = '12px';
+  watermarkLabel.style.color = '#a1a1aa';
+  watermarkLabel.style.fontWeight = '500';
+  watermarkLabel.style.transition = 'color 0.2s';
+
+  hiddenCheck.addEventListener('change', () => {
+    if (hiddenCheck.checked) {
+      customCheck.style.backgroundColor = '#6366f1';
+      customCheck.style.borderColor = '#6366f1';
+      customCheck.firstElementChild.style.opacity = '1';
+      customCheck.firstElementChild.style.transform = 'scale(1)';
+    } else {
+      customCheck.style.backgroundColor = '#09090b';
+      customCheck.style.borderColor = '#27272a';
+      customCheck.firstElementChild.style.opacity = '0';
+      customCheck.firstElementChild.style.transform = 'scale(0.6)';
+    }
+  });
+
+  watermarkWrapper.onmouseenter = () => { 
+    watermarkLabel.style.color = '#d4d4d8'; 
+    if(!hiddenCheck.checked) customCheck.style.borderColor = '#3f3f46';
+  };
+  watermarkWrapper.onmouseleave = () => { 
+    watermarkLabel.style.color = '#a1a1aa'; 
+    if(!hiddenCheck.checked) customCheck.style.borderColor = '#27272a';
+  };
+
+  watermarkWrapper.appendChild(hiddenCheck);
+  watermarkWrapper.appendChild(customCheck);
+  watermarkWrapper.appendChild(watermarkLabel);
+  container.appendChild(watermarkWrapper);
 
   const btnWrapper = document.createElement('div');
   btnWrapper.style.display = 'flex'; 
@@ -385,13 +465,13 @@ function showCropcapPreview(frames, physicalW, physicalH) {
       }
     }
 
-    // 🚀 ROUTE OUT TO SEPARATE PAGES SAFELY
     chrome.runtime.sendMessage({
       action: "open_html_compiler",
       frames: frames,
       targetW: targetW,
       targetH: targetH,
-      fileName: customName
+      fileName: customName,
+      withWatermark: hiddenCheck.checked
     });
 
     modal.remove();

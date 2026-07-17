@@ -5,7 +5,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         pendingFrames: message.frames, 
         targetW: message.targetW,
         targetH: message.targetH,
-        fileName: message.fileName
+        fileName: message.fileName,
+        withWatermark: message.withWatermark // Track watermark state
       });
     });
   }
@@ -16,6 +17,6 @@ chrome.commands.onCommand.addListener(async (command) => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.id) return;
 
-    chrome.tabs.sendMessage(tab.id, { action: "start_selection", duration: 3 }).catch(() => {});
+    chrome.tabs.sendMessage(tab.id, { action: "start_selection", duration: 3, hideCursor: false }).catch(() => {});
   }
 });

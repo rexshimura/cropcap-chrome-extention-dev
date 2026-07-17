@@ -1,5 +1,6 @@
 document.getElementById('snapBtn').addEventListener('click', async () => {
   const duration = parseInt(document.getElementById('duration').value) || 3;
+  const hideCursor = document.getElementById('hideCursor').checked;
   
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.id) return;
@@ -10,18 +11,17 @@ document.getElementById('snapBtn').addEventListener('click', async () => {
   }
 
   try {
-    await chrome.tabs.sendMessage(tab.id, { action: "start_selection", duration: duration });
+    await chrome.tabs.sendMessage(tab.id, { action: "start_selection", duration: duration, hideCursor: hideCursor });
     window.close();
   } catch (err) {
     try {
-      // Fallback injection array ensures order execution sequence
       await chrome.scripting.executeScript({ 
         target: { tabId: tab.id }, 
         files: ['gifshot.js', 'content.js'] 
       });
       
       setTimeout(async () => {
-        await chrome.tabs.sendMessage(tab.id, { action: "start_selection", duration: duration });
+        await chrome.tabs.sendMessage(tab.id, { action: "start_selection", duration: duration, hideCursor: hideCursor });
         window.close();
       }, 150);
     } catch (injectErr) {
