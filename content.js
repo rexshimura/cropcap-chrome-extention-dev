@@ -1,0 +1,509 @@
+// 🎯 GLOBAL CONTEXT OVERRIDE (Warning Cleaner)
+(function() {
+  const originalGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function(type, attributes) {
+    if (type === '2d') {
+      attributes = attributes || {};
+      attributes.willReadFrequently = true;
+    }
+    return originalGetContext.call(this, type, attributes);
+  };
+})();
+
+let isSelecting = false;
+let startX, startY;
+let startScreenX, startScreenY;
+let overlayCanvas = null;
+let ctxOverlay = null;
+let recordDuration = 3;
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "start_selection") {
+    recordDuration = request.duration;
+    createSnippingOverlay();
+  }
+});
+
+function createSnippingOverlay() {
+  if (overlayCanvas) return;
+
+  overlayCanvas = document.createElement('canvas');
+  overlayCanvas.style.position = 'fixed';
+  overlayCanvas.style.top = '0';
+  overlayCanvas.style.left = '0';
+  overlayCanvas.style.width = '100vw';
+  overlayCanvas.style.height = '100vh';
+  overlayCanvas.style.zIndex = '9999999';
+  overlayCanvas.style.cursor = 'crosshair';
+  
+  overlayCanvas.width = window.innerWidth;
+  overlayCanvas.height = window.innerHeight;
+  
+  ctxOverlay = overlayCanvas.getContext('2d');
+  drawMask(0, 0, 0, 0);
+
+  document.body.appendChild(overlayCanvas);
+  overlayCanvas.addEventListener('mousedown', startSnipping);
+}
+
+function drawMask(x, y, w, h) {
+  ctxOverlay.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  ctxOverlay.fillStyle = 'rgba(10, 10, 12, 0.65)';
+  ctxOverlay.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  
+  if (w > 0 && h > 0) {
+    ctxOverlay.globalCompositeOperation = 'destination-out';
+    ctxOverlay.fillRect(x, y, w, h);
+    ctxOverlay.globalCompositeOperation = 'source-over';
+    
+    ctxOverlay.strokeStyle = '#6366f1';
+    ctxOverlay.lineWidth = 2;
+    ctxOverlay.strokeRect(x, y, w, h);
+  }
+}
+
+function startSnipping(e) {
+  isSelecting = true;
+  startX = e.clientX;
+  startY = e.clientY;
+  startScreenX = e.screenX;
+  startScreenY = e.screenY;
+  overlayCanvas.addEventListener('mousemove', updateSnipping);
+  overlayCanvas.addEventListener('mouseup', endSnipping);
+}
+
+function updateSnipping(e) {
+  if (!isSelecting) return;
+  const currentX = e.clientX;
+  const currentY = e.clientY;
+  const x = Math.min(startX, currentX);
+  const y = Math.min(startY, currentY);
+  const w = Math.abs(startX - currentX);
+  const h = Math.abs(startY - currentY);
+  drawMask(x, y, w, h);
+}
+
+async function endSnipping(e) {
+  isSelecting = false;
+  overlayCanvas.removeEventListener('mousemove', updateSnipping);
+  overlayCanvas.removeEventListener('mouseup', endSnipping);
+
+  const finalScreenX = Math.min(startScreenX, e.screenX);
+  const finalScreenY = Math.min(startScreenY, e.screenY);
+  const finalScreenW = Math.abs(startScreenX - e.screenX);
+  const finalScreenH = Math.abs(startScreenY - e.screenY);
+
+  const visualX = Math.min(startX, e.clientX);
+  const visualY = Math.min(startY, e.clientY);
+  const visualW = Math.abs(startX - e.clientX);
+  const visualH = Math.abs(startY - e.clientY);
+
+  overlayCanvas.remove();
+  overlayCanvas = null;
+
+  if (finalScreenW > 15 && finalScreenH > 15) {
+    await captureAbsoluteMonitorSnippet(finalScreenX, finalScreenY, finalScreenW, finalScreenH, visualX, visualY, visualW, visualH);
+  }
+}
+
+async function captureAbsoluteMonitorSnippet(scrX, scrY, scrW, scrH, visX, visY, visW, visH) {
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { displaySurface: "monitor" },
+      audio: false
+    });
+
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.autoplay = true;
+
+    video.onloadedmetadata = () => {
+      const videoTrack = stream.getVideoTracks()[0];
+      const settings = videoTrack.getSettings();
+      const scaleX = (settings.width || 1920) / window.screen.width;
+      const scaleY = (settings.height || 1080) / window.screen.height;
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = scrW * scaleX;
+      canvas.height = scrH * scaleY;
+
+      const frames = [];
+      const intervalTime = 100; 
+      const maxFrames = (recordDuration * 1000) / intervalTime;
+
+      const recordFrame = document.createElement('div');
+      recordFrame.style.position = 'fixed';
+      recordFrame.style.left = `${visX - 3}px`;
+      recordFrame.style.top = `${visY - 3}px`;
+      recordFrame.style.width = `${visW + 6}px`;
+      recordFrame.style.height = `${visH + 6}px`;
+      recordFrame.style.border = '1px dashed rgba(239, 68, 68, 0.4)';
+      recordFrame.style.boxShadow = '0 0 20px rgba(239, 68, 68, 0.25), 0 0 0 9999px rgba(10, 10, 12, 0.4)'; 
+      recordFrame.style.pointerEvents = 'none'; 
+      recordFrame.style.zIndex = '9999999';
+      
+      const cornerStyle = document.createElement("style");
+      cornerStyle.innerText = `
+        .cropcap-bracket { position: absolute; width: 12px; height: 12px; border: 2px solid #ef4444; }
+        @keyframes cropcap-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+      `;
+      document.head.appendChild(cornerStyle);
+
+      const positions = [
+        { top: '-2px', left: '-2px', borderRight: 'none', borderBottom: 'none' },
+        { top: '-2px', right: '-2px', borderLeft: 'none', borderBottom: 'none' },
+        { bottom: '-2px', left: '-2px', borderRight: 'none', borderTop: 'none' },
+        { bottom: '-2px', right: '-2px', borderLeft: 'none', borderTop: 'none' }
+      ];
+
+      positions.forEach(pos => {
+        const bracket = document.createElement('div');
+        bracket.className = 'cropcap-bracket';
+        Object.assign(bracket.style, pos);
+        recordFrame.appendChild(bracket);
+      });
+
+      const timerLabel = document.createElement('div');
+      timerLabel.style.position = 'absolute';
+      timerLabel.style.top = '-32px';
+      timerLabel.style.left = '-2px';
+      timerLabel.style.background = '#ef4444';
+      timerLabel.style.color = '#ffffff';
+      timerLabel.style.padding = '4px 10px';
+      timerLabel.style.fontSize = '11px';
+      timerLabel.style.borderRadius = '6px';
+      timerLabel.innerHTML = `REC | ${recordDuration.toFixed(1)}s`;
+      
+      recordFrame.appendChild(timerLabel);
+      document.body.appendChild(recordFrame);
+
+      let timeLeft = recordDuration;
+
+      const recordInterval = setInterval(() => {
+        ctx.drawImage(video, scrX * scaleX, scrY * scaleY, scrW * scaleX, scrH * scaleY, 0, 0, canvas.width, canvas.height);
+        frames.push(canvas.toDataURL('image/jpeg', 0.6));
+
+        timeLeft -= (intervalTime / 1000);
+        if (timeLeft < 0) timeLeft = 0;
+        timerLabel.innerHTML = `REC | ${timeLeft.toFixed(1)}s`;
+
+        if (frames.length >= maxFrames) {
+          clearInterval(recordInterval);
+          videoTrack.stop();
+          setTimeout(() => {
+            recordFrame.remove();
+            cornerStyle.remove();
+            showCropcapPreview(frames, canvas.width, canvas.height);
+          }, 200);
+        }
+      }, intervalTime);
+    };
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function showCropcapPreview(frames, physicalW, physicalH) {
+  const modal = document.createElement('div');
+  modal.style.position = 'fixed';
+  modal.style.top = '0'; modal.style.left = '0'; modal.style.width = '100vw'; modal.style.height = '100vh';
+  modal.style.backgroundColor = 'rgba(9, 9, 11, 0.85)'; modal.style.backdropFilter = 'blur(10px)';
+  modal.style.display = 'flex'; modal.style.justifyContent = 'center'; modal.style.alignItems = 'center';
+  modal.style.zIndex = '10000000'; modal.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+  const container = document.createElement('div');
+  container.style.backgroundColor = '#18181b'; 
+  container.style.border = '1px solid #27272a';
+  container.style.padding = '24px'; 
+  container.style.borderRadius = '14px'; 
+  container.style.width = '460px';
+  container.style.maxWidth = '92vw';
+  container.style.display = 'flex'; 
+  container.style.flexDirection = 'column'; 
+  container.style.alignItems = 'center';
+  container.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.6)';
+  container.style.boxSizing = 'border-box';
+
+  // 🎯 BRANDED HEADER WITH LOGO ICON
+  const headerWrapper = document.createElement('div');
+  headerWrapper.style.display = 'flex';
+  headerWrapper.style.alignItems = 'center';
+  headerWrapper.style.gap = '10px';
+  headerWrapper.style.alignSelf = 'flex-start';
+  headerWrapper.style.marginBottom = '16px';
+
+  const logoIcon = document.createElement('img');
+  logoIcon.src = chrome.runtime.getURL('main-icon.png');
+  logoIcon.style.width = '20px';
+  logoIcon.style.height = '20px';
+  logoIcon.style.objectFit = 'contain';
+
+  const title = document.createElement('h3');
+  title.innerText = 'Capture Preview'; 
+  title.style.color = '#f4f4f5'; 
+  title.style.fontSize = '16px';
+  title.style.fontWeight = '600';
+  title.style.margin = '0';
+
+  headerWrapper.appendChild(logoIcon);
+  headerWrapper.appendChild(title);
+  container.appendChild(headerWrapper);
+
+  const previewBox = document.createElement('div');
+  previewBox.style.width = '100%';
+  previewBox.style.height = '240px';
+  previewBox.style.backgroundColor = '#09090b';
+  previewBox.style.border = '1px solid #27272a';
+  previewBox.style.borderRadius = '8px';
+  previewBox.style.marginBottom = '20px';
+  previewBox.style.display = 'flex';
+  previewBox.style.justifyContent = 'center';
+  previewBox.style.alignItems = 'center';
+  previewBox.style.overflow = 'hidden';
+  previewBox.style.boxSizing = 'border-box';
+
+  const previewImg = document.createElement('img');
+  previewImg.src = frames[0]; 
+  previewImg.style.maxWidth = '100%'; 
+  previewImg.style.maxHeight = '100%';
+  previewImg.style.objectFit = 'contain';
+  
+  previewBox.appendChild(previewImg);
+  container.appendChild(previewBox);
+
+  let currentFrameIdx = 0;
+  const animationInterval = setInterval(() => {
+    currentFrameIdx = (currentFrameIdx + 1) % frames.length;
+    previewImg.src = frames[currentFrameIdx];
+  }, 100);
+
+  const today = new Date();
+  const defaultFileName = `cc-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  const inputGroup = document.createElement('div');
+  inputGroup.style.width = '100%'; 
+  inputGroup.style.marginBottom = '24px';
+  inputGroup.style.display = 'flex';
+  inputGroup.style.flexDirection = 'column';
+  inputGroup.style.gap = '8px';
+  inputGroup.style.boxSizing = 'border-box';
+
+  const inputLabel = document.createElement('label');
+  inputLabel.innerText = 'FILE NAME';
+  inputLabel.style.fontSize = '11px';
+  inputLabel.style.fontWeight = '600';
+  inputLabel.style.color = '#71717a';
+  inputLabel.style.letterSpacing = '0.5px';
+  inputLabel.style.alignSelf = 'flex-start';
+
+  const fileNameInput = document.createElement('input');
+  fileNameInput.type = 'text'; 
+  fileNameInput.value = defaultFileName;
+  fileNameInput.style.width = '100%'; 
+  fileNameInput.style.padding = '10px 12px';
+  fileNameInput.style.backgroundColor = '#09090b'; 
+  fileNameInput.style.border = '1px solid #27272a';
+  fileNameInput.style.borderRadius = '6px'; 
+  fileNameInput.style.color = '#ffffff';
+  fileNameInput.style.fontSize = '13px';
+  fileNameInput.style.boxSizing = 'border-box';
+  fileNameInput.style.outline = 'none';
+  fileNameInput.style.transition = 'border-color 0.2s, box-shadow 0.2s';
+  
+  fileNameInput.addEventListener('focus', () => {
+    fileNameInput.style.borderColor = '#6366f1';
+    fileNameInput.style.boxShadow = '0 0 0 2px rgba(99, 102, 241, 0.2)';
+  });
+  fileNameInput.addEventListener('blur', () => {
+    fileNameInput.style.borderColor = '#27272a';
+    fileNameInput.style.boxShadow = 'none';
+  });
+
+  inputGroup.appendChild(inputLabel);
+  inputGroup.appendChild(fileNameInput);
+  container.appendChild(inputGroup);
+
+  const btnWrapper = document.createElement('div');
+  btnWrapper.style.display = 'flex'; 
+  btnWrapper.style.gap = '12px'; 
+  btnWrapper.style.width = '100%';
+  btnWrapper.style.boxSizing = 'border-box';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.innerText = 'Cancel'; 
+  closeBtn.style.flex = '1'; 
+  closeBtn.style.padding = '12px';
+  closeBtn.style.background = 'transparent'; 
+  closeBtn.style.color = '#a1a1aa'; 
+  closeBtn.style.border = '1px solid #3f3f46';
+  closeBtn.style.borderRadius = '6px'; 
+  closeBtn.style.cursor = 'pointer';
+  closeBtn.style.fontSize = '13px';
+  closeBtn.style.fontWeight = '500';
+  closeBtn.style.transition = 'background 0.2s, color 0.2s';
+
+  const downloadBtn = document.createElement('button');
+  downloadBtn.innerText = 'Download GIF'; 
+  downloadBtn.style.flex = '2'; 
+  downloadBtn.style.padding = '12px';
+  downloadBtn.style.background = '#6366f1'; 
+  downloadBtn.style.color = '#ffffff'; 
+  downloadBtn.style.border = 'none';
+  downloadBtn.style.borderRadius = '6px'; 
+  downloadBtn.style.cursor = 'pointer';
+  downloadBtn.style.fontSize = '13px';
+  downloadBtn.style.fontWeight = '500';
+  downloadBtn.style.transition = 'background 0.2s';
+
+  closeBtn.onmouseenter = () => { closeBtn.style.background = '#27272a'; closeBtn.style.color = '#f4f4f5'; };
+  closeBtn.onmouseleave = () => { closeBtn.style.background = 'transparent'; closeBtn.style.color = '#a1a1aa'; };
+  downloadBtn.onmouseenter = () => { downloadBtn.style.background = '#4f46e5'; };
+  downloadBtn.onmouseleave = () => { downloadBtn.style.background = '#6366f1'; };
+
+  btnWrapper.appendChild(closeBtn);
+  btnWrapper.appendChild(downloadBtn);
+  container.appendChild(btnWrapper);
+  modal.appendChild(container);
+  document.body.appendChild(modal);
+
+  closeBtn.addEventListener('click', () => { clearInterval(animationInterval); modal.remove(); });
+
+  downloadBtn.addEventListener('click', () => {
+    const customName = fileNameInput.value.trim() || defaultFileName;
+    const dpi = window.devicePixelRatio || 1;
+    let targetW = Math.max(80, Math.floor(physicalW / dpi));
+    let targetH = Math.max(80, Math.floor(physicalH / dpi));
+
+    const maxBound = 600;
+    if (targetW > maxBound || targetH > maxBound) {
+      const aspect = targetW / targetH;
+      if (targetW > targetH) {
+        targetW = maxBound;
+        targetH = Math.floor(maxBound / aspect);
+      } else {
+        targetH = maxBound;
+        targetW = Math.floor(maxBound * aspect);
+      }
+    }
+
+    const compilerHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Cropcap Workspace | Compiling...</title>
+      <style>
+        body { 
+          margin: 0; 
+          background-color: #09090b; 
+          color: #ffffff; 
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+          display: flex; 
+          justify-content: center; 
+          align-items: center; 
+          min-height: 100vh; 
+        }
+        .card { 
+          background: #18181b; 
+          border: 1px solid #27272a; 
+          padding: 40px; 
+          border-radius: 14px; 
+          text-align: center; 
+          width: 380px; 
+          box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6); 
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .spinner-container {
+          position: relative;
+          width: 64px;
+          height: 64px;
+          margin-bottom: 24px;
+        }
+        .spinner { 
+          width: 100%; 
+          height: 100%; 
+          border: 4px solid #27272a; 
+          border-top-color: #6366f1; 
+          border-radius: 50%; 
+          animation: spin 1s cubic-bezier(0.55, 0.055, 0.675, 0.19) infinite; 
+          box-sizing: border-box;
+        }
+        .pulse-dot {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 12px;
+          height: 12px;
+          background-color: #6366f1;
+          border-radius: 50%;
+          box-shadow: 0 0 12px #6366f1;
+        }
+        h2 { 
+          font-size: 18px; 
+          margin: 0 0 8px 0; 
+          font-weight: 600; 
+          color: #f4f4f5;
+          letter-spacing: -0.3px;
+        }
+        p { 
+          color: #a1a1aa; 
+          font-size: 13px; 
+          margin: 0; 
+          line-height: 1.5;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      </style>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/gifshot/0.3.2/gifshot.min.js"><\/script>
+    </head>
+    <body>
+      <div class="card">
+        <div class="spinner-container">
+          <div class="spinner"></div>
+          <div class="pulse-dot"></div>
+        </div>
+        <h2>Encoding True GIF Loop</h2>
+        <p id="status">Stitching image asset segments into an optimized loop timeline. Your download will start instantly...</p>
+      </div>
+      <script>
+        window.addEventListener('load', () => {
+          gifshot.createGIF({
+            images: ${JSON.stringify(frames)},
+            interval: 0.1,
+            gifWidth: ${targetW},
+            gifHeight: ${targetH},
+            numFrames: ${frames.length},
+            sampleInterval: 5,
+            numWorkers: 2
+          }, function(obj) {
+            if(!obj.error) {
+              const dl = document.createElement('a');
+              dl.download = "${customName}.gif";
+              dl.href = obj.image;
+              dl.click();
+              document.getElementById('status').style.color = "#34d399";
+              document.getElementById('status').innerText = "Download complete! Closing tab...";
+              setTimeout(() => window.close(), 1200);
+            } else {
+              alert("Error compiling: " + obj.error);
+            }
+          });
+        });
+      <\/script>
+    </body>
+    </html>`;
+
+    const base64Uri = "data:text/html;base64," + btoa(unescape(encodeURIComponent(compilerHtml)));
+    
+    chrome.runtime.sendMessage({
+      action: "open_html_compiler",
+      dataUri: base64Uri
+    });
+
+    modal.remove();
+    clearInterval(animationInterval);
+  });
+}

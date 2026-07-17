@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Cropcap",
+  "version": "4.5",
+  "description": "Professional screen recorder with instant data-URI conversion.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "main-icon.png"
+  },
+  "icons": {
+    "16": "main-icon.png",
+    "48": "main-icon.png",
+    "128": "main-icon.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "commands": {
+    "trigger-snippet": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "MacCtrl+Shift+S"
+      },
+      "description": "Trigger the snippet selection area instantly"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}
