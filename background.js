@@ -1,6 +1,13 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "open_html_compiler") {
-    chrome.tabs.create({ url: message.dataUri });
+    chrome.tabs.create({ url: chrome.runtime.getURL("compiler.html") }, () => {
+      chrome.storage.local.set({ 
+        pendingFrames: message.frames, 
+        targetW: message.targetW,
+        targetH: message.targetH,
+        fileName: message.fileName
+      });
+    });
   }
 });
 

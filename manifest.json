@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Cropcap",
-  "version": "4.5",
-  "description": "Professional screen recorder with instant data-URI conversion.",
+  "version": "4.8",
+  "description": "Professional screen recorder with clean modular tab compilation.",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -32,6 +33,12 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["compiler.html", "gifshot.js", "compiler.js", "main-icon.png"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

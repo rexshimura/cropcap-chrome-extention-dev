@@ -55,7 +55,6 @@ function drawMask(x, y, w, h) {
     ctxOverlay.globalCompositeOperation = 'destination-out';
     ctxOverlay.fillRect(x, y, w, h);
     ctxOverlay.globalCompositeOperation = 'source-over';
-    
     ctxOverlay.strokeStyle = '#6366f1';
     ctxOverlay.lineWidth = 2;
     ctxOverlay.strokeRect(x, y, w, h);
@@ -225,7 +224,6 @@ function showCropcapPreview(frames, physicalW, physicalH) {
   container.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.6)';
   container.style.boxSizing = 'border-box';
 
-  // 🎯 BRANDED HEADER WITH LOGO ICON
   const headerWrapper = document.createElement('div');
   headerWrapper.style.display = 'flex';
   headerWrapper.style.alignItems = 'center';
@@ -387,120 +385,13 @@ function showCropcapPreview(frames, physicalW, physicalH) {
       }
     }
 
-    const compilerHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Cropcap Workspace | Compiling...</title>
-      <style>
-        body { 
-          margin: 0; 
-          background-color: #09090b; 
-          color: #ffffff; 
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-          display: flex; 
-          justify-content: center; 
-          align-items: center; 
-          min-height: 100vh; 
-        }
-        .card { 
-          background: #18181b; 
-          border: 1px solid #27272a; 
-          padding: 40px; 
-          border-radius: 14px; 
-          text-align: center; 
-          width: 380px; 
-          box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6); 
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-        .spinner-container {
-          position: relative;
-          width: 64px;
-          height: 64px;
-          margin-bottom: 24px;
-        }
-        .spinner { 
-          width: 100%; 
-          height: 100%; 
-          border: 4px solid #27272a; 
-          border-top-color: #6366f1; 
-          border-radius: 50%; 
-          animation: spin 1s cubic-bezier(0.55, 0.055, 0.675, 0.19) infinite; 
-          box-sizing: border-box;
-        }
-        .pulse-dot {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          width: 12px;
-          height: 12px;
-          background-color: #6366f1;
-          border-radius: 50%;
-          box-shadow: 0 0 12px #6366f1;
-        }
-        h2 { 
-          font-size: 18px; 
-          margin: 0 0 8px 0; 
-          font-weight: 600; 
-          color: #f4f4f5;
-          letter-spacing: -0.3px;
-        }
-        p { 
-          color: #a1a1aa; 
-          font-size: 13px; 
-          margin: 0; 
-          line-height: 1.5;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-      </style>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/gifshot/0.3.2/gifshot.min.js"><\/script>
-    </head>
-    <body>
-      <div class="card">
-        <div class="spinner-container">
-          <div class="spinner"></div>
-          <div class="pulse-dot"></div>
-        </div>
-        <h2>Encoding True GIF Loop</h2>
-        <p id="status">Stitching image asset segments into an optimized loop timeline. Your download will start instantly...</p>
-      </div>
-      <script>
-        window.addEventListener('load', () => {
-          gifshot.createGIF({
-            images: ${JSON.stringify(frames)},
-            interval: 0.1,
-            gifWidth: ${targetW},
-            gifHeight: ${targetH},
-            numFrames: ${frames.length},
-            sampleInterval: 5,
-            numWorkers: 2
-          }, function(obj) {
-            if(!obj.error) {
-              const dl = document.createElement('a');
-              dl.download = "${customName}.gif";
-              dl.href = obj.image;
-              dl.click();
-              document.getElementById('status').style.color = "#34d399";
-              document.getElementById('status').innerText = "Download complete! Closing tab...";
-              setTimeout(() => window.close(), 1200);
-            } else {
-              alert("Error compiling: " + obj.error);
-            }
-          });
-        });
-      <\/script>
-    </body>
-    </html>`;
-
-    const base64Uri = "data:text/html;base64," + btoa(unescape(encodeURIComponent(compilerHtml)));
-    
+    // 🚀 ROUTE OUT TO SEPARATE PAGES SAFELY
     chrome.runtime.sendMessage({
       action: "open_html_compiler",
-      dataUri: base64Uri
+      frames: frames,
+      targetW: targetW,
+      targetH: targetH,
+      fileName: customName
     });
 
     modal.remove();
