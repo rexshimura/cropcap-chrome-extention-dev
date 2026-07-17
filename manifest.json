@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Cropcap",
-  "version": "4.8",
-  "description": "Professional screen recorder with clean modular tab compilation.",
+  "version": "4.9",
+  "description": "Professional screen recorder with branded tab compilation.",
   "permissions": [
     "activeTab",
     "scripting",
