@@ -16,6 +16,7 @@
       align-items: center;
       gap: 10px;
       margin-bottom: 18px;
+      position: relative; /* Anchor the tooltip container safely */
     }
     .header img {
       width: 18px;
@@ -29,6 +30,70 @@
       letter-spacing: -0.3px;
       color: #ffffff;
     }
+    
+    /* 🎯 APP VERSION METRIC BADGE */
+    .app-version {
+      font-size: 10px;
+      color: #71717a;
+      font-weight: 500;
+      margin-left: auto; /* Pushes version beautifully to the far right side */
+      user-select: none;
+    }
+
+    /* 🎯 TOOLTIP ARCHITECTURE STYLES */
+    .tooltip-wrapper {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: help;
+    }
+    .info-icon {
+      width: 14px;
+      height: 14px;
+      color: #71717a;
+      transition: color 0.2s;
+    }
+    .tooltip-wrapper:hover .info-icon {
+      color: #6366f1; /* Glows indigo on hover */
+    }
+    .tooltip-text {
+      visibility: hidden;
+      background-color: #09090b;
+      color: #a1a1aa;
+      text-align: center;
+      border-radius: 6px;
+      padding: 6px 10px;
+      position: absolute;
+      z-index: 100;
+      top: 140%; /* Floats nicely BELOW the header */
+      left: 50%;
+      transform: translateX(-50%) translateY(-4px);
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s, visibility 0.2s;
+      font-size: 10px;
+      font-weight: 500;
+      border: 1px solid #27272a;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+      pointer-events: none; /* Prevents cursor fighting */
+      white-space: nowrap;
+    }
+    /* Tiny arrow indicator centered ABOVE the message box pointing up */
+    .tooltip-text::after {
+      content: "";
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      margin-left: -5px;
+      border-width: 5px;
+      border-style: solid;
+      border-color: transparent transparent #09090b transparent;
+    }
+    .tooltip-wrapper:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
     .field-group {
       margin-bottom: 14px;
     }
@@ -189,6 +254,19 @@
   <div class="header">
     <img src="main-icon.png" alt="Cropcap">
     <h3>Cropcap</h3>
+    
+    <!-- Interactive Tooltip Node -->
+    <div class="tooltip-wrapper">
+      <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+      <span class="tooltip-text">Developed by Rexshimura</span>
+    </div>
+
+    <!-- 🎯 NEW: Dynamic Version Marker Badging Element -->
+    <span class="app-version">v1.1.0</span>
   </div>
 
   <div class="field-group">
@@ -213,7 +291,7 @@
     <span class="checkbox-label-text">Hide Cursor</span>
   </label>
 
-  <!-- 🎯 NEW: Pre-recording Delay Timer Toggle Checkbox -->
+  <!-- Pre-recording Delay Timer Toggle Checkbox -->
   <label class="checkbox-container">
     <input type="checkbox" id="useDelayTimer">
     <div class="custom-checkbox">
@@ -222,7 +300,7 @@
     <span class="checkbox-label-text">Use Countdown Timer</span>
   </label>
 
-  <!-- 🎯 NEW: Countdown Value Row Control -->
+  <!-- Countdown Value Row Control -->
   <div class="nested-input-row" id="delayRow">
     <div class="input-wrapper" style="max-width: 90px;">
       <div class="input-icon">
