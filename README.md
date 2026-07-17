@@ -31,7 +31,7 @@ Optionally adds a modern branded watermark featuring:
 
 ---
 
-# 📂 Project Structure
+# Project Structure
 
 ```text
 cropcap/
@@ -48,7 +48,7 @@ cropcap/
 
 ---
 
-# 🚀 Installation
+# Installation
 
 1. Clone or download this repository.
 
@@ -70,7 +70,7 @@ chrome://extensions/
 
 ---
 
-# 🛠️ Usage
+# Usage
 
 ## Step 1 — Configure Recording
 
